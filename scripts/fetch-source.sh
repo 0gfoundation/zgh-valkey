@@ -7,7 +7,7 @@ ver=$1 sha=$2 commit=$3 out=$4
 
 tmp=$(mktemp -d)
 url=https://github.com/valkey-io/valkey/archive/refs/tags/$ver.tar.gz
-curl -fsSL -o "$tmp/src.tar.gz" "$url"
+curl -fsSL --retry 5 --retry-all-errors -o "$tmp/src.tar.gz" "$url"
 echo "$sha  $tmp/src.tar.gz" | shasum -a 256 -c
 
 # GitHub's archive carries the commit it was made from (git get-tar-commit-id).
