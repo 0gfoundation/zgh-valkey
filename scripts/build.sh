@@ -14,7 +14,7 @@ esac
 # No TLS: zgh's server listens on a unix socket only. No systemd notify.
 # MALLOC is Valkey's default: jemalloc on Linux, libc on macOS.
 make -C "$src" -j"$jobs" BUILD_TLS=no USE_SYSTEMD=no valkey-server valkey-cli \
-  >"$src/build.log" 2>&1 || { tail -n 80 "$src/build.log"; exit 1; }
+  >"$src/build.log" 2>&1 || { grep -nE -B5 -A5 'error|Error|\*\*\*' "$src/build.log" | head -n 150; exit 1; }
 grep -E '^MALLOC=|^BUILD_TLS=' "$src/src/.make-settings" || true
 
 rm -rf "$stage"; mkdir -p "$stage/bin"
