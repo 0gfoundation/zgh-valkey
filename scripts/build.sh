@@ -19,7 +19,7 @@ make -C "$src/src" -j"$jobs" BUILD_TLS=no USE_SYSTEMD=no valkey-server valkey-cl
   >"$src/build.log" 2>&1 || {
     # Under -j the failing compile can sit anywhere in the log: show compiler errors,
     # make's own failure lines, and the end of the log.
-    grep -nE -A3 'error:|\*\*\*' "$src/build.log" | tail -n 120
+    grep -nE -A3 'error:|\*\*\*' "$src/build.log" | tail -n 120 || true  # no match must not skip the tail below
     echo "--- end of build.log"; tail -n 40 "$src/build.log"; exit 1
   }
 grep -E '^MALLOC=|^BUILD_TLS=' "$src/src/.make-settings" || true
