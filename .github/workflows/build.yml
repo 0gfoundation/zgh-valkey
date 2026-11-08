@@ -22,7 +22,20 @@ env:
   SRC_COMMIT: ${{ inputs.valkey_commit }}
 
 jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Fetch and check the source archive
+        run: scripts/fetch-source.sh "$VER" "$SRC_SHA256" "$SRC_COMMIT" valkey-src.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: source
+          path: valkey-src.tar.gz
+          if-no-files-found: error
+
   build:
+    needs: source
     name: ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -38,8 +51,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Fetch source
-        run: scripts/fetch-source.sh "$VER" "$SRC_SHA256" "$SRC_COMMIT" "$RUNNER_TEMP/src"
+      - uses: actions/download-artifact@v8
+        with:
+          name: source
+          path: ${{ runner.temp }}
+
+      - name: Unpack source
+        run: |
+          echo "$SRC_SHA256  $RUNNER_TEMP/valkey-src.tar.gz" | shasum -a 256 -c
+          mkdir "$RUNNER_TEMP/src"
+          tar -xzf "$RUNNER_TEMP/valkey-src.tar.gz" -C "$RUNNER_TEMP/src" --strip-components 1
 
       - name: Build (macOS)
         if: matrix.os == 'macos'
@@ -85,6 +106,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
+          pattern: "*-*"
           path: dist
           merge-multiple: true
 
