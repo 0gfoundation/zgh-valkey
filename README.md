@@ -20,7 +20,8 @@ sha256 pinned in zgh's source, and unpacks it.
 
 Every build:
 
-- uses Valkey's tagged source archive, checked against the sha256 that
+- uses Valkey's tagged source archive, which the `source` job fetches
+  once and checks against the sha256 that
   [valkey-io/valkey-hashes](https://github.com/valkey-io/valkey-hashes)
   publishes and against the tag's commit (`git get-tar-commit-id`);
 - passes `BUILD_TLS=no USE_SYSTEMD=no`: zgh's server listens on a unix
@@ -39,7 +40,7 @@ Linux builds run in `debian:bullseye`, so they need no newer glibc than
 compiler from `archive.debian.org`. `scripts/check-linux.sh` fails the build unless each binary has the
 target's arch and `ldd` lists only glibc's own libraries (libc, libm,
 libpthread, libdl, librt, the loader); it prints the highest `GLIBC_`
-symbol version the binaries need.
+symbol version the binaries need (`GLIBC_2.29` for 9.0.7).
 
 ## Release assets
 
