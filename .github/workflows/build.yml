@@ -1,0 +1,103 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      valkey_version:
+        description: Valkey tag
+        default: "9.0.7"
+      valkey_sha256:
+        description: sha256 of the tag's source archive, from valkey-io/valkey-hashes
+        default: "ba3e4cd0fb90e994323212b4a49e7e454e25e02864b9b3f1bf04416699d3f5c2"
+      valkey_commit:
+        description: commit the tag points at
+        default: "fe8d406c0b5a64ec897f6455e4de684629883764"
+
+permissions:
+  contents: read
+
+env:
+  VER: ${{ inputs.valkey_version }}
+  SRC_SHA256: ${{ inputs.valkey_sha256 }}
+  SRC_COMMIT: ${{ inputs.valkey_commit }}
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: darwin-arm64, runner: macos-15, os: macos, arch: arm64 }
+          - { target: darwin-amd64, runner: macos-15-intel, os: macos, arch: x86_64 }
+          - { target: linux-amd64, runner: ubuntu-latest, os: linux, arch: x86-64 }
+          - { target: linux-arm64, runner: ubuntu-24.04-arm, os: linux, arch: aarch64 }
+    env:
+      ASSET: valkey-${{ inputs.valkey_version }}-${{ matrix.target }}.tar.gz
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Fetch source
+        run: scripts/fetch-source.sh "$VER" "$SRC_SHA256" "$SRC_COMMIT" "$RUNNER_TEMP/src"
+
+      - name: Build (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          scripts/build.sh "$RUNNER_TEMP/src" "$RUNNER_TEMP/stage"
+          scripts/check-macos.sh "$RUNNER_TEMP/stage" "${{ matrix.arch }}"
+
+      - name: Build (Debian bullseye)
+        if: matrix.os == 'linux'
+        run: |
+          docker run --rm -v "$PWD:/w" -v "$RUNNER_TEMP:/out" debian:bullseye bash -c '
+            set -e
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends build-essential file >/dev/null
+            ldd --version | head -1
+            /w/scripts/build.sh /out/src /out/stage
+            /w/scripts/check-linux.sh /out/stage "${{ matrix.arch }}"'
+          sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/stage"
+
+      - name: Package
+        run: scripts/package.sh "$RUNNER_TEMP/stage" "$ASSET"
+
+      - name: Smoke
+        run: scripts/smoke.sh "$ASSET" "$VER"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    # Runs from a branch build and smoke only; main publishes.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: valkey-${{ inputs.valkey_version }}
+        run: |
+          # A published release never changes: zgh pins its hashes.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $TAG already exists" >&2; exit 1
+          fi
+          cd dist
+          test "$(ls *.tar.gz | wc -l)" -eq 4
+          sha256sum *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+          gh release create "$TAG" *.tar.gz SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" \
+            --notes "Valkey $VER (tag commit $SRC_COMMIT), valkey-server and valkey-cli, built without TLS and smoke-tested on each target. Built by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID."
