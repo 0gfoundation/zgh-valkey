@@ -35,7 +35,8 @@ binary has the target's arch, `otool -L` lists only `/usr/lib` and
 `/System` libraries, `minos` is 11.0 and `codesign -v` passes.
 
 Linux builds run in `debian:bullseye`, so they need no newer glibc than
-2.31. `scripts/check-linux.sh` fails the build unless each binary has the
+2.31. Bullseye is past its end of life, so the build installs its
+compiler from `archive.debian.org`. `scripts/check-linux.sh` fails the build unless each binary has the
 target's arch and `ldd` lists only glibc's own libraries (libc, libm,
 libpthread, libdl, librt, the loader); it prints the highest `GLIBC_`
 symbol version the binaries need.

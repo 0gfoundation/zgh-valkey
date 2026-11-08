@@ -43,7 +43,8 @@ stop() {
 }
 
 start
-proto=$(c HELLO 3 | awk 'prev == "proto" {print; exit} {prev = $0}')
+# valkey-cli prints a RESP3 map one "key value" pair per line (RESP2 would print them on alternate lines).
+proto=$(c HELLO 3 | awk '$1 == "proto" {print $2; exit}')
 echo "HELLO 3 proto: $proto"
 [ "$proto" = 3 ] || { c HELLO 3 >&2; echo "HELLO 3 did not switch to RESP3" >&2; exit 1; }
 [ "$(c SET zgh:smoke hello)" = OK ] || { echo "SET failed" >&2; exit 1; }
